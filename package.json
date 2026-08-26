@@ -1,0 +1,9 @@
+{
+  "name": "ec-leaderboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "leaderboard": "node scripts/leaderboard.mjs"
+  }
+}

@@ -1,0 +1,6 @@
+node_modules
+data
+.vercel
+
+# Dune queries stay local for now.
+dune

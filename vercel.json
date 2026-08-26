@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/leaderboard.js": {
+      "maxDuration": 30
+    }
+  }
+}

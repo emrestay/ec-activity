@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Event Contracts activity</title>
+    <style>
+      :root {
+        --bg: #0b0d10;
+        --panel: #12161b;
+        --line: #1e242c;
+        --text: #e8edf3;
+        --dim: #8b97a6;
+        --accent: #5ee2a0;
+        --warn: #f5a623;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 15px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap { max-width: 1020px; margin: 0 auto; padding: 32px 20px 64px; }
+      h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em; }
+      h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); margin: 26px 0 10px; font-weight: 600; }
+      .sub { color: var(--dim); font-size: 13px; margin-bottom: 22px; }
+      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+      .card .k { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+      .card .v { font-size: 22px; font-variant-numeric: tabular-nums; margin-top: 4px; }
+      .filters { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+      .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+      .row > .lbl { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; width: 62px; flex: none; }
+      .tab {
+        background: var(--panel); border: 1px solid var(--line); color: var(--dim);
+        padding: 5px 12px; border-radius: 999px; cursor: pointer; font-size: 13px;
+      }
+      .tab[aria-selected="true"] { color: var(--bg); background: var(--accent); border-color: var(--accent); font-weight: 600; }
+      .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      @media (max-width: 620px) { .split { grid-template-columns: 1fr; } }
+      table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+      th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--line); }
+      th { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+      tr:last-child td { border-bottom: 0; }
+      td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+      .rank { color: var(--dim); width: 44px; }
+      .rank.top { color: var(--accent); font-weight: 700; }
+      .addr {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
+        background: none; border: 0; padding: 0; color: inherit; cursor: pointer;
+        display: inline-flex; align-items: center; gap: 7px;
+      }
+      .addr:hover { color: var(--accent); }
+      .addr .ico { opacity: 0; transition: opacity 0.1s; font-size: 11px; }
+      .addr:hover .ico, .addr:focus-visible .ico { opacity: 0.7; }
+      .addr.copied { color: var(--accent); }
+      .addr.copied .ico { opacity: 1; }
+      .card .k .hint { text-transform: none; letter-spacing: 0; cursor: help; opacity: 0.7; }
+      .notes { margin-top: 22px; color: var(--dim); font-size: 12.5px; }
+      .notes p { margin: 8px 0; }
+      .scroll { overflow-x: auto; }
+      .err { color: #ff6b6b; }
+      .empty { color: var(--dim); padding: 18px 4px; }
+      @media (max-width: 620px) { .hide-sm { display: none; } .wrap { padding: 20px 12px 48px; } }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Event Contracts activity</h1>
+      <div class="sub" id="sub">loading…</div>
+
+      <div class="filters" id="filters"></div>
+      <div class="cards" id="cards"></div>
+
+      <div class="split">
+        <div><h2 style="margin-top:0">By asset</h2><div class="scroll"><table id="assets"></table></div></div>
+        <div><h2 style="margin-top:0">By cadence</h2><div class="scroll"><table id="cadence"></table></div></div>
+      </div>
+
+      <h2>Traders</h2>
+      <div class="scroll"><table id="table"></table></div>
+      <div class="notes" id="notes"></div>
+    </div>
+
+    <script type="module">
+      const params = new URLSearchParams(location.search)
+      const token = params.get("t")
+      const state = {
+        data: null,
+        network: params.get("network") === "testnet" ? "testnet" : "mainnet",
+        since: params.get("since") || "7d",
+        asset: params.get("asset") || "",
+        interval: params.get("interval") || "",
+      }
+
+      const WINDOWS = [["1d", "24h"], ["7d", "7 days"], ["30d", "30 days"], ["all", "All time"]]
+
+      const ago = (ts) => {
+        if (!ts) return "-"
+        const s = Math.floor(Date.now() / 1e3) - ts
+        if (s < 60) return `${s}s ago`
+        if (s < 3600) return `${Math.floor(s / 60)}m ago`
+        if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+        return `${Math.floor(s / 86400)}d ago`
+      }
+      const short = (a) => `${a.slice(0, 8)}…${a.slice(-6)}`
+
+      /** navigator.clipboard needs a secure context; the textarea works anywhere. */
+      async function copy(btn) {
+        const text = btn.dataset.copy
+        try {
+          await navigator.clipboard.writeText(text)
+        } catch {
+          const ta = Object.assign(document.createElement("textarea"), { value: text })
+          ta.style.cssText = "position:fixed;opacity:0"
+          document.body.append(ta)
+          ta.select()
+          document.execCommand("copy")
+          ta.remove()
+        }
+        const label = btn.firstChild
+        const was = label.textContent
+        label.textContent = "copied"
+        btn.classList.add("copied")
+        setTimeout(() => {
+          label.textContent = was
+          btn.classList.remove("copied")
+        }, 1000)
+      }
+      const cadence = (s) => (Number(s) % 3600 === 0 ? `${Number(s) / 3600}h` : `${Number(s) / 60}m`)
+      const day = (ts) => (ts ? new Date(ts * 1e3).toISOString().slice(0, 16).replace("T", " ") + "Z" : "-")
+
+      /** The query is the URL: a filtered view is a link someone can paste. */
+      function sync() {
+        const q = new URLSearchParams()
+        if (token) q.set("t", token)
+        if (state.network !== "mainnet") q.set("network", state.network)
+        if (state.since !== "7d") q.set("since", state.since)
+        if (state.asset) q.set("asset", state.asset)
+        if (state.interval) q.set("interval", state.interval)
+        history.replaceState(null, "", q.toString() ? `?${q}` : location.pathname)
+      }
+
+      function chips(id, label, options, current, onPick) {
+        return `<div class="row"><span class="lbl">${label}</span>${options
+          .map(([v, text]) => `<button class="tab" data-f="${id}" data-v="${v}" aria-selected="${String(current) === String(v)}">${text}</button>`)
+          .join("")}</div>`
+      }
+
+      function renderFilters() {
+        const d = state.data
+        // A narrower window can drop the option that is currently selected. Keep
+        // it on screen anyway, or the page silently filters on something with no
+        // chip to unselect.
+        const keep = (list, current) => (current && !list.some(([v]) => String(v) === String(current)) ? [...list, [current, current]] : list)
+        const assets = keep([["", "All"], ...d.filters.assets.map((a) => [a, a])], state.asset)
+        const cadences = keep([["", "All"], ...d.filters.intervals.map((s) => [s, cadence(s)])], state.interval)
+        document.getElementById("filters").innerHTML = [
+          chips("network", "Network", [["mainnet", "Mainnet"], ["testnet", "Testnet"]], state.network),
+          chips("since", "Window", WINDOWS, state.since),
+          chips("asset", "Asset", assets, state.asset),
+          chips("interval", "Cadence", cadences, state.interval),
+        ].join("")
+        document.querySelectorAll(".tab").forEach((b) =>
+          b.addEventListener("click", () => {
+            state[b.dataset.f] = b.dataset.v
+            // Asset and cadence are read off the fills in the window, so a
+            // window change can drop the option that is currently selected.
+            sync()
+            load()
+          }),
+        )
+      }
+
+      function render() {
+        const d = state.data
+        const t = d.totals
+
+        document.getElementById("sub").textContent =
+          `${d.network} · ${d.collateral} · ${day(d.window.since)} → ${day(d.window.until - 1)} · updated ${ago(d.generatedAt)}`
+
+        document.getElementById("cards").innerHTML = [
+          ["Volume", `${t.volume} ${d.collateral}`, "Collateral that changed hands, each fill counted once."],
+          ["Unique traders", t.traders.toLocaleString("en-US"), ""],
+          ["Fills", t.fills.toLocaleString("en-US"), ""],
+          [
+            "Contracts",
+            t.contracts,
+            "One contract is an Up + Down pair worth 1 " +
+              d.collateral +
+              " at settlement. Contracts are ERC-6909 tokens with 18 decimals and the venue trades them in lots of 0.001, so a count is normally fractional.",
+          ],
+        ]
+          .map(
+            ([k, v, hint]) =>
+              `<div class="card"><div class="k">${k}${hint ? ` <span class="hint" title="${hint}">ⓘ</span>` : ""}</div><div class="v">${v}</div></div>`,
+          )
+          .join("")
+
+        const breakdown = (el, rows, label) => {
+          document.getElementById(el).innerHTML = rows.length
+            ? `<thead><tr><th>${label}</th><th class="num">Volume</th><th class="num">Fills</th><th class="num hide-sm">Traders</th></tr></thead>
+               <tbody>${rows
+                 .map((g) => `<tr><td>${el === "cadence" ? cadence(g.key) : g.key}</td><td class="num">${g.volume}</td><td class="num">${g.fills}</td><td class="num hide-sm">${g.traders}</td></tr>`)
+                 .join("")}</tbody>`
+            : `<tbody><tr><td class="empty">No fills in this window.</td></tr></tbody>`
+        }
+        breakdown("assets", d.byAsset, "Asset")
+        breakdown("cadence", d.byInterval, "Cadence")
+
+        document.getElementById("table").innerHTML = d.traders.length
+          ? `<thead><tr><th class="rank">#</th><th>Address</th><th class="num">Volume (${d.collateral})</th><th class="num hide-sm">Fills</th><th class="num hide-sm">Maker</th><th class="num hide-sm">Last trade</th></tr></thead>
+             <tbody>${d.traders
+               .map(
+                 (r) => `<tr>
+                   <td class="rank ${r.rank <= 3 ? "top" : ""}">${r.rank}</td>
+                   <td><button class="addr" data-copy="${r.address}" title="${r.address} (click to copy)">${short(r.address)}<span class="ico">⧉</span></button></td>
+                   <td class="num">${r.volume}</td>
+                   <td class="num hide-sm">${r.fills}</td>
+                   <td class="num hide-sm">${r.makerFills}</td>
+                   <td class="num hide-sm">${ago(r.lastTs)}</td>
+                 </tr>`,
+               )
+               .join("")}</tbody>`
+          : `<tbody><tr><td class="empty">No fills in this window.</td></tr></tbody>`
+
+        document.querySelectorAll(".addr").forEach((b) => b.addEventListener("click", () => copy(b)))
+
+        const n = []
+        n.push(`<p>The headline volume counts the collateral that moved, each fill once. A trader's own row is their leg of it, what they paid or received, so the column adds up to ${t.traderVolume} ${d.collateral}, more than the headline, because a direct fill has a payer and a receiver and both belong on the board. An Up leg is worth its notional, a Down leg the complement.</p>`)
+        n.push(`<p>A contract is one Up + one Down token, together worth 1 ${d.collateral} at settlement. They are ERC-6909 tokens with 18 decimals and trade in lots of 0.001, so contract counts are fractional by design.</p>`)
+        if (t.selfTrades)
+          n.push(`<p>${t.selfTrades} self-trade fill(s) excluded (${t.selfTradeVolume} ${d.collateral} of Up-leg notional). Event contracts charge zero maker and taker fees, so self-crossing costs only gas.</p>`)
+        n.push(`<p>Read straight from the markets indexer, so every load recomputes the window from chain data. Click an address to copy it.</p>`)
+        document.getElementById("notes").innerHTML = n.join("")
+      }
+
+      async function load() {
+        const q = new URLSearchParams({ network: state.network })
+        if (token) q.set("t", token)
+        if (state.since === "all") q.set("since", "all")
+        else q.set("days", parseInt(state.since, 10) || 7)
+        if (state.asset) q.set("asset", state.asset)
+        if (state.interval) q.set("interval", state.interval)
+        try {
+          const res = await fetch(`/api/leaderboard?${q}`)
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}))
+            throw new Error(res.status === 401 ? "unauthorized: missing or wrong access token" : body.error || `HTTP ${res.status}`)
+          }
+          state.data = await res.json()
+          renderFilters()
+          render()
+        } catch (err) {
+          document.getElementById("sub").innerHTML = `<span class="err">${err.message}</span>`
+        }
+      }
+
+      sync()
+      load()
+      setInterval(load, 60_000)
+    </script>
+  </body>
+</html>
