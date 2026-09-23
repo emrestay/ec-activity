@@ -51,7 +51,7 @@ console.log(`\nEvent Contracts activity: ${network} (${collateral})`)
 console.log(`window : ${iso(since)} → ${iso(until - 1)}`)
 console.log(`scope  : ${scope}`)
 console.log(`fills  : ${stats.fills} in window, ${stats.counted} counted` + (stats.selfTrades ? `, ${stats.selfTrades} self-trades excluded` : ""))
-console.log(`traders: ${stats.traders}`)
+console.log(`traders: ${stats.traders} (taker side; ${stats.makerWallets} market-maker wallets)`)
 console.log(`volume : ${fmt(stats.volume, decimals)} ${collateral} (collateral moved; each fill once)`)
 console.log(`         ${fmt(stats.traderVolume, decimals)} credited across traders, both sides of a direct fill count\n`)
 
@@ -113,6 +113,7 @@ writeFileSync(
         contracts: stats.contracts.toString(),
         fills: stats.counted,
         traders: stats.traders,
+        makerWallets: stats.makerWallets,
         selfTrades: stats.selfTrades,
         selfTradeVolume: stats.selfTradeVolume.toString(),
       },
