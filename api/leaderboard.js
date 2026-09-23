@@ -45,6 +45,7 @@ export default async function handler(req, res) {
       contracts: money(g.contracts),
       fills: g.fills,
       traders: g.traders,
+      makers: g.makers,
     })
 
     res.setHeader("cache-control", "s-maxage=30, stale-while-revalidate=120")
@@ -63,6 +64,8 @@ export default async function handler(req, res) {
         contracts: money(stats.contracts),
         fills: stats.counted,
         traders: stats.traders,
+        makerWallets: stats.makerWallets,
+        addresses: stats.addresses,
         selfTrades: stats.selfTrades,
         selfTradeVolume: money(stats.selfTradeVolume),
       },
