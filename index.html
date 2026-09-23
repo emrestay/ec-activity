@@ -184,7 +184,16 @@
 
         document.getElementById("cards").innerHTML = [
           ["Volume", `${t.volume} ${d.collateral}`, "Collateral that changed hands, each fill counted once."],
-          ["Unique traders", t.traders.toLocaleString("en-US"), ""],
+          [
+            "Unique traders",
+            t.traders.toLocaleString("en-US"),
+            "Addresses that took at least one fill. Maker-side addresses are excluded: each event-contract market is quoted by its own market-maker wallet, so counting them counts markets.",
+          ],
+          [
+            "Market-maker wallets",
+            t.makerWallets.toLocaleString("en-US"),
+            "Distinct maker addresses in the window, one per quoted market.",
+          ],
           ["Fills", t.fills.toLocaleString("en-US"), ""],
           [
             "Contracts",
